@@ -83,12 +83,15 @@ void mksfs(int fresh) {
 }
 
 static void openFileTbl_init() {
-  //open the root dir file
+  //open the root dir file at initialization
   oft[0].inode = ROOT_DIR_INODE;
   oft[0].read = 0;
   oft[0].write = inodeTbl_get(ROOT_DIR_INODE).size;
+  //all other entries are set to closed
   for (int i = 1; i < MAX_FILES; ++i) {
-
+    oft[0].inode = -1;
+    oft[0].read = 0;
+    oft[0].write = 0;
   }
 }
 
