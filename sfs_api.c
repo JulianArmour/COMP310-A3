@@ -95,7 +95,7 @@ static void openFileTbl_init() {
 static Inode inodeTbl_get(int inodeId) {
   Inode inode;
   int blk[BLOCK_SIZE/4];
-  read_blocks(inodeId, 1, blk);
+  read_blocks(inodeTbl[inodeId], 1, blk);
   inode.mode = blk[0];
   inode.size = blk[1];
   for (int i = 2; i < 15; ++i) {
