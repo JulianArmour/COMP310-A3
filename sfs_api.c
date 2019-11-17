@@ -23,15 +23,15 @@ static const int MAX_FILES = 256;//maximum number of files sfs can create (inclu
 static const int MAX_FILE_SIZE = BLOCK_SIZE * 268;//inode can hold 268 data blocks
 
 enum mode {MODE_DIR, MODE_BASIC};
-typedef char Dir_Entry[MAX_FNAME_SIZE + sizeof(int)];//an entry in the root directory [filename|inode]
+typedef char DirEntry[MAX_FNAME_SIZE + sizeof(int)];//an entry in the root directory [filename|inodeId]
 typedef struct {int inode; int read; int write;} FD;//a file descriptor
 typedef struct {enum mode mode; int size; int pointers[13];} Inode;
 
 //In-memory data structures
 int inodeTbl[MAX_FILES];//Inode Table cache (holds up to 256 inodes)
-Dir_Entry dir[MAX_FILES];//Directory cache. (holds up to 256 files)
+DirEntry dir[MAX_FILES];//Directory cache. (holds up to 256 files)
 FD oft[MAX_FILES];//Open File Descriptor Table (holds up to 256 open files)
-int freeMap[8];//Free Block Bitmap (256 / 32 = 8)
+int freeMap[MAX_FILES / sizeof(int)];//Free Block Bitmap (256 / 32 = 8)
 
 //function declarations
 static void inodeTbl_init();
@@ -141,9 +141,12 @@ int sfs_fread(int fileID, char *buf, int length) {
 }
 
 static void dirCache_init() {
-
+  oft[0].read = 0;//set root dir's read pointer to beginning of file
+  sfs_fread(oft[0].inode, (char *)dir, sizeof(dir));
 }
 
+/*Initializes the Open File Descriptor Table (OFT) in-memory data structure.
+ * After initialization, the OFT will only contain 1 open file, the root directory.*/
 static void openFileTbl_init() {
   //open the root dir file at initialization
   oft[0].inode = ROOT_DIR_INODE;
@@ -157,6 +160,7 @@ static void openFileTbl_init() {
   }
 }
 
+/*Given an index in the inode table (inodeId), this will return the corresponding inode data-structure,*/
 static Inode inodeTbl_get(int inodeId) {
   Inode inode;
   int blk[BLOCK_SIZE/4];
@@ -169,6 +173,7 @@ static Inode inodeTbl_get(int inodeId) {
   return inode;
 }
 
+/*Initializes the inode table cache by reading the inode table from the disk.*/
 static void inodeTbl_init() {
   memset(inodeTbl, 0, sizeof(inodeTbl));
   read_blocks(INODE_BLK, 1, inodeTbl);
