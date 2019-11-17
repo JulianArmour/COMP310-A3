@@ -44,6 +44,8 @@ static void dirCache_init();
 
 void freeBitmap_init();
 
+int allocBlk(int *buf);
+
 static int min(int x, int y) {
   if (x < y) return x;
   else return y;
@@ -146,6 +148,70 @@ int sfs_fread(int fileID, char *buf, int length) {
   //update open file descriptor table
   oft[fileID] = file;
   return bufIndex;
+}
+
+int sfs_fwrite(int fileID, char *buf, int length) {
+  FD file = oft[fileID];
+  Inode inode = inodeTbl_get(file.inode);
+  //if write query exceeds maximum file size
+  if (file.write + length > MAX_FILE_SIZE)
+    //set length = remaining file space
+    length = MAX_FILE_SIZE - file.write;
+  //write buf to disk block by block.
+  int bufIndex = 0;
+  while (bufIndex < length) {
+    int blockNum;//address of block being writtern to
+    char blockBuff[BLOCK_SIZE];//buffer for Data Block
+    int inodePointer = file.write / BLOCK_SIZE;
+    //get blockNum for inodePointer, allocate blocks as needed
+    if (inodePointer < 12) {//none-indirect pointer
+      if (inode.pointers[inodePointer] <= 0)//no block already allocated
+        if(allocBlk(&inode.pointers[inodePointer], 1))//allocate 1 block
+          return bufIndex;//disk out of memory
+      blockNum = inode.pointers[inodePointer];
+    } else {//indirect pointer
+      if (inode.pointers[12] <= 0)//no block already allocated
+        if(allocBlk(&inode.pointers[12], 1))//allocate 1 block
+          return bufIndex;//disk out of memory
+      //read indirect block into memory
+      read_blocks(inode.pointers[12], 1, blockBuff);
+      //check if block needs to be allocated
+      int *indirectBlock = (int *) blockBuff;
+      int indirectPointer = inodePointer - 12;
+      if (indirectBlock[indirectPointer] <= 0) {//no block already allocated
+        if (allocBlk(&indirectBlock[indirectPointer], 1))
+          return bufIndex;//disk out of memory
+        write_blocks(indirectBlock[indirectPointer], 1, blockBuff);
+      }
+      blockNum = indirectBlock[indirectPointer];
+    }
+    /*now perform write*/
+
+    //where the write pointer is within the block
+    int blockWritePointer = file.write % BLOCK_SIZE;
+    //number of bytes to write, write until either end of block or end of buffer
+    int numBytes = min(BLOCK_SIZE - blockWritePointer, length - bufIndex);
+    //only read existing block if we don't overwrite the entire block
+    if (numBytes < BLOCK_SIZE)
+      read_blocks(blockNum, 1, blockBuff);
+    memcpy(blockBuff+blockWritePointer, buf+bufIndex, numBytes);
+    write_blocks(blockNum, 1, blockBuff);
+    file.write += numBytes;
+    bufIndex += numBytes;
+  }
+  //if data was appended, update file size
+  if (file.write > inode.size)
+    inode.size = file.write;
+  //update open file descriptor table cache
+  oft[fileID] = file;
+  //update inode table cache
+  inodeTbl_update(file.inodeIndex, inode);//updates the inode's Data Block
+  return bufIndex;
+}
+
+/*allocates a data block and writes its address to buf. Returns 0 on success, -1 on failure.*/
+int allocBlk(int *buf) {
+  return 0;//TODO
 }
 
 /*Initializes the directory cache by reading the directory contents from the disk.*/
