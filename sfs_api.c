@@ -14,12 +14,13 @@
 static const int MAX_FNAME_SIZE = 20;//maximum length of a file name (including 'period' and 'file extension'
 static const int BLOCK_SIZE = 1024;//size in bytes of a block
 static const int MAX_BLOCK = 256;//number of disk blocks
-static const int INODE_BLKS = 1;//number of "inode table" blocks (up to 255 files supported)
+static const int INODE_BLKS = 1;//number of "inode table" blocks
 static const int INODE_BLK = 1;//the Inode Table's block address
 static const int FREE_BM_BLKS = 1;//number of "free bitmap" blocks
 static const int FREE_BM_BLK = 2;//the free block bitmap's block address
 static const int ROOT_DIR_INODE = 0;//the inode id (index in the inode tbl) for the root directory
-static const int MAX_FILES = 256;
+static const int MAX_FILES = 256;//maximum number of files sfs can create (including root)
+static const int MAX_FILE_SIZE = BLOCK_SIZE * 268;//inode can hold 268 data blocks
 
 enum mode {MODE_DIR, MODE_BASIC};
 typedef char Dir_Entry[MAX_FNAME_SIZE + sizeof(int)];//an entry in the root directory [filename|inode]
@@ -38,6 +39,13 @@ static void inodeTbl_init();
 static void openFileTbl_init();
 
 static Inode inodeTbl_get(int inodeId);
+
+static void dirCache_init();
+
+static int min(int x, int y) {
+  if (x < y) return x;
+  else return y;
+}
 
 void mksfs(int fresh) {
   //disk size: 256KiB (256 blocks)
@@ -78,8 +86,62 @@ void mksfs(int fresh) {
   inodeTbl_init();//loads inode table into memory (cache)
   //load an open file descriptor table, with only the root DIR opened at index 0.
   openFileTbl_init();
-  dirTblCache_init();//loads directory into memory (cache)
+  dirCache_init();//loads directory into memory (cache)
   freeBitmap_init();//loads the Free Data Block Bitmap into memory (cache)
+}
+
+int sfs_fread(int fileID, char *buf, int length) {
+  FD file = oft[fileID];
+  if (file.inode < 0) return 0;//file is not open
+  Inode inode = inodeTbl_get(file.inode);
+  //if read query exceeds maximum file size
+  if (file.read + length > MAX_FILE_SIZE) {
+    //then set length = remaining file space
+    length = MAX_FILE_SIZE - file.read;
+  }
+  //read into buf from disk block by block.
+  int bufIndex = 0;
+  while (bufIndex < length) {
+    int blockNum;//address of block being written to
+    char blockBuff[BLOCK_SIZE];//buffer for data block
+    int inodePointer = file.read / BLOCK_SIZE;
+    //get blockNum for inodePointer, it will be <= 0 if it's not allocated
+    if (inodePointer < 12) {//non-indirect pointer
+      blockNum = inode.pointers[inodePointer];
+    } else {//indirect pointer
+      if (inode.pointers[12] <= 0) {//if no block allocated
+        blockNum = -1;
+      } else {
+        //read indirect block into memory
+        read_blocks(inode.pointers[12], 1, blockBuff);
+        int *indirectBlock = (int *) blockBuff;
+        int indirectPointer = inodePointer - 12;
+        blockNum = indirectBlock[indirectPointer];
+      }
+    }
+    /*now perform read*/
+    //where the read pointer is within the block
+    int blockReadPointer = file.read % BLOCK_SIZE;
+    //read until either end of block or end of buffer
+    int numBytes = min(BLOCK_SIZE - blockReadPointer, length - bufIndex);
+    if (blockNum <= 0) {
+      //no data block, treat as all-zero block
+      memset(buf+bufIndex, 0, numBytes);
+    } else {
+      //there is a data block, read it into memory and transfer to buf
+      read_blocks(blockNum, 1, blockBuff);
+      memcpy(buf+bufIndex, blockBuff+blockReadPointer, numBytes);
+    }
+    file.read += numBytes;
+    bufIndex += numBytes;
+  }
+  //update open file descriptor table
+  oft[fileID] = file;
+  return bufIndex;
+}
+
+static void dirCache_init() {
+
 }
 
 static void openFileTbl_init() {
