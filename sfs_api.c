@@ -42,6 +42,8 @@ static Inode inodeTbl_get(int inodeId);
 
 static void dirCache_init();
 
+void freeBitmap_init();
+
 static int min(int x, int y) {
   if (x < y) return x;
   else return y;
@@ -90,6 +92,12 @@ void mksfs(int fresh) {
   freeBitmap_init();//loads the Free Data Block Bitmap into memory (cache)
 }
 
+/*Initializes the Free Bitmap cache by reading the disk's version of it.*/
+void freeBitmap_init() {
+  read_blocks(FREE_BM_BLK, FREE_BM_BLKS, freeMap);
+}
+
+/*TODO*/
 int sfs_fread(int fileID, char *buf, int length) {
   FD file = oft[fileID];
   if (file.inode < 0) return 0;//file is not open
@@ -140,9 +148,10 @@ int sfs_fread(int fileID, char *buf, int length) {
   return bufIndex;
 }
 
+/*Initializes the directory cache by reading the directory contents from the disk.*/
 static void dirCache_init() {
   oft[0].read = 0;//set root dir's read pointer to beginning of file
-  sfs_fread(oft[0].inode, (char *)dir, sizeof(dir));
+  sfs_fread(0, (char *)dir, sizeof(dir));
 }
 
 /*Initializes the Open File Descriptor Table (OFT) in-memory data structure.
