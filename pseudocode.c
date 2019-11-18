@@ -1,4 +1,4 @@
-void mksfs(int fresh) {
+void Fmksfs(int fresh) {
   //disk size: 256KiB (256 blocks)
   //max file size: 268 KiB (limited by disk size)
   //max number of files: 256
@@ -42,7 +42,7 @@ void mksfs(int fresh) {
 
 
 
-int sfs_fwrite(int fileID, char *buf, int length) {
+int Fsfs_fwrite(int fileID, char *buf, int length) {
   openFile_t file = openFDTbl_get(fileID);
   inode_t inode = inodeTbl_get(file.inodeIndex);
   //if write query exceeds maximum file size
@@ -102,7 +102,7 @@ int sfs_fwrite(int fileID, char *buf, int length) {
 }
 
 
-int sfs_fread(int fileID, char *buf, int length) {
+int Fsfs_fread(int fileID, char *buf, int length) {
   openFile_t file = openFDTbl_get(fileID);
   inode_t inode = inodeTbl_get(file.inodeIndex);
   //if read query exceeds maximum file size
@@ -161,7 +161,7 @@ int closesfs() {
 }
 
 
-int sfs_fopen(char *name) {
+int Fsfs_fopen(char *name) {
   int fileInode;
   if ((fileInode = dirTbl_getInode(name)) <= 0) {//file doesn't exist
     fileInode = inodeTbl_findFree();//find free inode

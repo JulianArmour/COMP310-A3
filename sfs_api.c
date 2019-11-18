@@ -24,7 +24,7 @@ static const int MAX_FILE_SIZE = BLOCK_SIZE * 268;//inode can hold 268 data bloc
 
 enum mode {MODE_DIR, MODE_BASIC};
 typedef char DirEntry[MAX_FNAME_SIZE + sizeof(int)];//an entry in the root directory [filename|inodeId]
-typedef struct {int inode; int read; int write;} FD;//a file descriptor
+typedef struct {int inodeID; int read; int write;} FD;//a file descriptor
 typedef struct {enum mode mode; int size; int pointers[13];} Inode;
 
 //In-memory data structures
@@ -38,7 +38,7 @@ static void inodeTbl_init();
 
 static void openFileTbl_init();
 
-static Inode inodeTbl_get(int inodeId);
+static Inode fetchInode(int inodeId);
 
 static void dirCache_init();
 
@@ -102,8 +102,8 @@ void freeBitmap_init() {
 /*TODO*/
 int sfs_fread(int fileID, char *buf, int length) {
   FD file = oft[fileID];
-  if (file.inode < 0) return 0;//file is not open
-  Inode inode = inodeTbl_get(file.inode);
+  if (file.inodeID < 0) return 0;//file is not open
+  Inode inode = fetchInode(file.inodeID);
   //if read query exceeds maximum file size
   if (file.read + length > MAX_FILE_SIZE) {
     //then set length = remaining file space
@@ -136,11 +136,11 @@ int sfs_fread(int fileID, char *buf, int length) {
     int numBytes = min(BLOCK_SIZE - blockReadPointer, length - bufIndex);
     if (blockNum <= 0) {
       //no data block, treat as all-zero block
-      memset(buf+bufIndex, 0, numBytes);
+      memset(&buf[bufIndex], 0, numBytes);
     } else {
       //there is a data block, read it into memory and transfer to buf
       read_blocks(blockNum, 1, blockBuff);
-      memcpy(buf+bufIndex, blockBuff+blockReadPointer, numBytes);
+      memcpy(&buf[bufIndex], blockBuff+blockReadPointer, numBytes);
     }
     file.read += numBytes;
     bufIndex += numBytes;
@@ -150,9 +150,23 @@ int sfs_fread(int fileID, char *buf, int length) {
   return bufIndex;
 }
 
+/*Updates the on-disk inode data-structure with in-memory inode.*/
+void flushInode(int inodeID, Inode inode) {
+  int blk[BLOCK_SIZE / sizeof(int)];
+  int inodeBlkAddr = inodeTbl[inodeID];
+  read_blocks(inodeBlkAddr, 1, (char *) blk);
+  //encode inode to block
+  blk[0] = inode.mode;
+  blk[1] = inode.size;
+  for (int i = 0; i < 13; ++i) {
+    blk[i+2] = inode.pointers[i];
+  }
+  write_blocks(inodeBlkAddr, 1, blk);
+}
+
 int sfs_fwrite(int fileID, char *buf, int length) {
   FD file = oft[fileID];
-  Inode inode = inodeTbl_get(file.inode);
+  Inode inode = fetchInode(file.inodeID);
   //if write query exceeds maximum file size
   if (file.write + length > MAX_FILE_SIZE)
     //set length = remaining file space
@@ -160,18 +174,18 @@ int sfs_fwrite(int fileID, char *buf, int length) {
   //write buf to disk block by block.
   int bufIndex = 0;
   while (bufIndex < length) {
-    int blockNum;//address of block being writtern to
+    int blockNum;//address of block being written to
     char blockBuff[BLOCK_SIZE];//buffer for Data Block
     int inodePointer = file.write / BLOCK_SIZE;
     //get blockNum for inodePointer, allocate blocks as needed
     if (inodePointer < 12) {//none-indirect pointer
       if (inode.pointers[inodePointer] <= 0)//no block already allocated
-        if(allocBlk(&inode.pointers[inodePointer], 1))//allocate 1 block
+        if(allocBlk(&inode.pointers[inodePointer]))//allocate 1 block
           return bufIndex;//disk out of memory
       blockNum = inode.pointers[inodePointer];
     } else {//indirect pointer
       if (inode.pointers[12] <= 0)//no block already allocated
-        if(allocBlk(&inode.pointers[12], 1))//allocate 1 block
+        if(allocBlk(&inode.pointers[12]))//allocate 1 block
           return bufIndex;//disk out of memory
       //read indirect block into memory
       read_blocks(inode.pointers[12], 1, blockBuff);
@@ -179,7 +193,7 @@ int sfs_fwrite(int fileID, char *buf, int length) {
       int *indirectBlock = (int *) blockBuff;
       int indirectPointer = inodePointer - 12;
       if (indirectBlock[indirectPointer] <= 0) {//no block already allocated
-        if (allocBlk(&indirectBlock[indirectPointer], 1))
+        if (allocBlk(&indirectBlock[indirectPointer]))
           return bufIndex;//disk out of memory
         write_blocks(indirectBlock[indirectPointer], 1, blockBuff);
       }
@@ -194,7 +208,7 @@ int sfs_fwrite(int fileID, char *buf, int length) {
     //only read existing block if we don't overwrite the entire block
     if (numBytes < BLOCK_SIZE)
       read_blocks(blockNum, 1, blockBuff);
-    memcpy(blockBuff+blockWritePointer, buf+bufIndex, numBytes);
+    memcpy(&blockBuff[blockWritePointer], &buf[bufIndex], numBytes);
     write_blocks(blockNum, 1, blockBuff);
     file.write += numBytes;
     bufIndex += numBytes;
@@ -205,7 +219,7 @@ int sfs_fwrite(int fileID, char *buf, int length) {
   //update open file descriptor table cache
   oft[fileID] = file;
   //update inode table cache
-  inodeTbl_update(file.inodeIndex, inode);//updates the inode's Data Block
+  flushInode(file.inodeID, inode);//updates the inode's Data Block
   return bufIndex;
 }
 
@@ -250,26 +264,27 @@ static void dirCache_init() {
  * After initialization, the OFT will only contain 1 open file, the root directory.*/
 static void openFileTbl_init() {
   //open the root dir file at initialization
-  oft[0].inode = ROOT_DIR_INODE;
+  oft[0].inodeID = ROOT_DIR_INODE;
   oft[0].read = 0;
-  oft[0].write = inodeTbl_get(ROOT_DIR_INODE).size;
+  oft[0].write = fetchInode(ROOT_DIR_INODE).size;
   //all other entries are set to closed
   for (int i = 1; i < MAX_FILES; ++i) {
-    oft[0].inode = -1;
+    oft[0].inodeID = -1;
     oft[0].read = 0;
     oft[0].write = 0;
   }
 }
 
 /*Given an index in the inode table (inodeId), this will return the corresponding inode data-structure,*/
-static Inode inodeTbl_get(int inodeId) {
+static Inode fetchInode(int inodeId) {
   Inode inode;
   int blk[BLOCK_SIZE/4];
   read_blocks(inodeTbl[inodeId], 1, blk);
+  //parse inode block
   inode.mode = blk[0];
   inode.size = blk[1];
-  for (int i = 2; i < 15; ++i) {
-    inode.pointers[i-2] = blk[i];
+  for (int i = 0; i < 13; ++i) {
+    inode.pointers[i] = blk[i+2];
   }
   return inode;
 }
