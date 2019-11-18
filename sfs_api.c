@@ -31,7 +31,7 @@ typedef struct {enum mode mode; int size; int pointers[13];} Inode;
 int inodeTbl[MAX_FILES];//Inode Table cache (holds up to 256 inodes)
 DirEntry dir[MAX_FILES];//Directory cache. (holds up to 256 files)
 FD oft[MAX_FILES];//Open File Descriptor Table (holds up to 256 open files)
-int freeMap[MAX_FILES / sizeof(int)];//Free Block Bitmap (256 / 32 = 8)
+unsigned int freeMap[MAX_FILES / sizeof(int)];//Free Block Bitmap (256 / 32 = 8)
 
 //function declarations
 static void inodeTbl_init();
@@ -44,7 +44,7 @@ static void dirCache_init();
 
 void freeBitmap_init();
 
-int allocBlk(int *buf);
+static int allocBlk(int *buf);
 
 static int min(int x, int y) {
   if (x < y) return x;
@@ -209,9 +209,35 @@ int sfs_fwrite(int fileID, char *buf, int length) {
   return bufIndex;
 }
 
+static void freeMap_flush() {
+  write_blocks(FREE_BM_BLK, 1, (char *) freeMap);
+}
+
 /*allocates a data block and writes its address to buf. Returns 0 on success, -1 on failure.*/
-int allocBlk(int *buf) {
-  return 0;//TODO
+static int allocBlk(int *buf) {
+  int addr = 0;
+  //iterate over each int buffer in the freeMap cache
+  for (unsigned long i = 0; i < (sizeof(freeMap) / sizeof(int)); ++i) {
+    //check if one of the bits is 0
+    if ((~freeMap[i]) > 0) {//one of the bits is 0
+      unsigned int mask = 0x80000000;//0b10000000...0
+      for (unsigned long j = 0; j < 8 * sizeof(int); ++j) {
+        if (freeMap[i] & mask) {//block at address 'addr' is free
+          *buf = addr;
+          freeMap[i] |= mask;//reserve block in free bitmap by marking the bit
+          freeMap_flush();
+          return 0;
+        } else {//block at address 'addr' not free, try next block
+          mask >>= (unsigned int) 1;
+          addr++;
+        }
+      }
+    } else {//all bits are 1, try next chunk of bits
+      addr += 8 * sizeof(int);
+    }
+  }
+  *buf = -1;
+  return -1;
 }
 
 /*Initializes the directory cache by reading the directory contents from the disk.*/
