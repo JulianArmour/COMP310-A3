@@ -34,6 +34,7 @@ typedef struct {enum mode mode; int size; int pointers[13];} Inode;
 //In-memory data structures
 int inodeTbl[MAX_FILES];//Inode Table cache (holds up to 256 inodes)
 DirEntry dir[MAX_FILES];//Directory cache. (holds up to 256 files)
+int dir_ptr = 0;
 FD oft[MAX_FILES];//Open File Descriptor Table (holds up to 256 open files)
 unsigned int freeMap[MAX_FILES / sizeof(int)];//Free Block Bitmap (256 / 32 = 8)
 
@@ -46,7 +47,7 @@ static Inode fetchInode(int inodeId);
 
 static void dirCache_init();
 
-void freeBitmap_init();
+static void freeBitmap_init();
 
 static int allocBlk(int *buf);
 
@@ -99,11 +100,39 @@ void mksfs(int fresh) {
 }
 
 /*Initializes the Free Bitmap cache by reading the disk's version of it.*/
-void freeBitmap_init() {
+void static freeBitmap_init() {
   read_blocks(FREE_BM_BLK, FREE_BM_BLKS, freeMap);
 }
 
-/*TODO*/
+/*Updates the on-disk inode data-structure with in-memory inode.*/
+void flushInode(int inodeID, Inode inode) {
+  int blk[BLOCK_BYTES / sizeof(int)];
+  int inodeBlkAddr = inodeTbl[inodeID];
+  read_blocks(inodeBlkAddr, 1, (char *) blk);
+  //encode inode to block
+  blk[0] = inode.mode;
+  blk[1] = inode.size;
+  for (int i = 0; i < 13; ++i) {
+    blk[i+2] = inode.pointers[i];
+  }
+  write_blocks(inodeBlkAddr, 1, blk);
+}
+
+/*Given an index in the inode table (inodeId), this will return the corresponding inode data-structure,*/
+static Inode fetchInode(int inodeId) {
+  Inode inode;
+  int blk[BLOCK_BYTES / 4];
+  read_blocks(inodeTbl[inodeId], 1, blk);
+  //parse inode block
+  inode.mode = blk[0];
+  inode.size = blk[1];
+  for (int i = 0; i < 13; ++i) {
+    inode.pointers[i] = blk[i+2];
+  }
+  return inode;
+}
+
+/*Given a fileID, reads in length bytes from the file to buf*/
 int sfs_fread(int fileID, char *buf, int length) {
   FD file = oft[fileID];
   if (file.inodeID < 0) return 0;//file is not open
@@ -154,20 +183,7 @@ int sfs_fread(int fileID, char *buf, int length) {
   return bufIndex;
 }
 
-/*Updates the on-disk inode data-structure with in-memory inode.*/
-void flushInode(int inodeID, Inode inode) {
-  int blk[BLOCK_BYTES / sizeof(int)];
-  int inodeBlkAddr = inodeTbl[inodeID];
-  read_blocks(inodeBlkAddr, 1, (char *) blk);
-  //encode inode to block
-  blk[0] = inode.mode;
-  blk[1] = inode.size;
-  for (int i = 0; i < 13; ++i) {
-    blk[i+2] = inode.pointers[i];
-  }
-  write_blocks(inodeBlkAddr, 1, blk);
-}
-
+/*Given a fileID, writes length bytes from buf to the file*/
 int sfs_fwrite(int fileID, char *buf, int length) {
   FD file = oft[fileID];
   Inode inode = fetchInode(file.inodeID);
@@ -277,20 +293,6 @@ static void openFileTbl_init() {
     oft[0].read = 0;
     oft[0].write = 0;
   }
-}
-
-/*Given an index in the inode table (inodeId), this will return the corresponding inode data-structure,*/
-static Inode fetchInode(int inodeId) {
-  Inode inode;
-  int blk[BLOCK_BYTES / 4];
-  read_blocks(inodeTbl[inodeId], 1, blk);
-  //parse inode block
-  inode.mode = blk[0];
-  inode.size = blk[1];
-  for (int i = 0; i < 13; ++i) {
-    inode.pointers[i] = blk[i+2];
-  }
-  return inode;
 }
 
 /*Initializes the inode table cache by reading the inode table from the disk.*/

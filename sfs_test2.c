@@ -116,7 +116,7 @@ main(int argc, char **argv)
     }
     filesize[i] = (rand() % (MAX_BYTES-MIN_BYTES)) + MIN_BYTES;
   }
-   sfs_remove(names[0]);
+  sfs_remove(names[0]);
   for (i = 0; i < 2; i++) {
     for (j = i + 1; j < 2; j++) {
       if (fds[i] == fds[j]) {
@@ -145,7 +145,7 @@ main(int argc, char **argv)
       }
       tmp = sfs_fwrite(fds[i], buffer, chunksize);
       if (tmp != chunksize) {
-        fprintf(stderr, "ERROR: Tried to write %d bytes, but wrote %d\n",
+        fprintf(stderr, "ERROR: Tried to write %d bytes, but wrote %d\n", 
                 chunksize, tmp);
         error_count++;
       }
@@ -172,7 +172,7 @@ main(int argc, char **argv)
   printf("File %s now has length %d and %s now has length %d:\n",
          names[0], filesize[0], names[1], filesize[1]);
 
-  /* Just to be cruel - attempt to read from a closed file handle.
+  /* Just to be cruel - attempt to read from a closed file handle. 
    */
   if (sfs_fread(fds[1], fixedbuf, sizeof(fixedbuf)) > 0) {
     fprintf(stderr, "ERROR: read from a closed file handle?\n");
@@ -180,10 +180,10 @@ main(int argc, char **argv)
   }
 
   fds[1] = sfs_fopen(names[1]);
-
-  sfs_fseek(0, 0);
-  sfs_fseek(1, 0);
-
+  
+  sfs_frseek(0, 0);
+  sfs_frseek(1, 0);
+  
   for (i = 0; i < 2; i++) {
     for (j = 0; j < filesize[i]; j += chunksize) {
       if ((filesize[i] - j) < 10) {
@@ -261,7 +261,7 @@ main(int argc, char **argv)
   for (i = 0; i < nopen; i++) {
     tmp = sfs_fwrite(fds[i], test_str, strlen(test_str));
     if (tmp != strlen(test_str)) {
-      fprintf(stderr, "ERROR: Tried to write %d, returned %d\n",
+      fprintf(stderr, "ERROR: Tried to write %d, returned %d\n", 
               (int)strlen(test_str), tmp);
       error_count++;
     }
@@ -282,7 +282,7 @@ main(int argc, char **argv)
   /* Now test the file contents.
    */
   for (i = 0; i < nopen; i++) {
-      sfs_fseek(fds[i], 0);
+      sfs_frseek(fds[i], 0);
   }
 
   for (j = 0; j < strlen(test_str); j++) {
@@ -294,7 +294,7 @@ main(int argc, char **argv)
         error_count++;
       }
       if (ch != test_str[j]) {
-        fprintf(stderr, "ERROR: Read wrong byte from %s at %d (%d,%d)\n",
+        fprintf(stderr, "ERROR: Read wrong byte from %s at %d (%d,%d)\n", 
                 names[i], j, ch, test_str[j]);
         error_count++;
         break;
@@ -317,7 +317,7 @@ main(int argc, char **argv)
 
   for (i = 0; i < nopen; i++) {
     fds[i] = sfs_fopen(names[i]);
-    sfs_fseek(fds[i], 0);
+    sfs_frseek(fds[i], 0);
     if (fds[i] >= 0) {
       readsize = sfs_fread(fds[i], fixedbuf, sizeof(fixedbuf));
       if (readsize != strlen(test_str)) {
@@ -327,7 +327,7 @@ main(int argc, char **argv)
 
       for (j = 0; j < strlen(test_str); j++) {
         if (test_str[j] != fixedbuf[j]) {
-          fprintf(stderr, "ERROR: Wrong byte in %s at %d (%d,%d)\n",
+          fprintf(stderr, "ERROR: Wrong byte in %s at %d (%d,%d)\n", 
                   names[i], j, fixedbuf[j], test_str[j]);
           printf("%d\n", fixedbuf[1]);
           error_count++;
@@ -391,7 +391,7 @@ main(int argc, char **argv)
    */
   for (i = 0; i < nopen; i++) {
     fds[i] = sfs_fopen(names[i]);
-    sfs_fseek(fds[i], 0);
+    sfs_frseek(fds[i], 0);
     if (fds[i] >= 0) {
       readsize = sfs_fread(fds[i], fixedbuf, sizeof(fixedbuf));
       if (readsize < strlen(test_str)) {
@@ -401,7 +401,7 @@ main(int argc, char **argv)
 
       for (j = 0; j < strlen(test_str); j++) {
         if (test_str[j] != fixedbuf[j]) {
-          fprintf(stderr, "ERROR: Wrong byte in %s at position %d (%d,%d)\n",
+          fprintf(stderr, "ERROR: Wrong byte in %s at position %d (%d,%d)\n", 
                   names[i], j, fixedbuf[j], test_str[j]);
           error_count++;
           break;
@@ -423,7 +423,7 @@ main(int argc, char **argv)
 	  fprintf(stderr, "ERROR: should be empty dir\n");
 	  error_count++;
   }
-
+ 
   fprintf(stderr, "Test program exiting with %d errors\n", error_count);
   return (error_count);
 }
