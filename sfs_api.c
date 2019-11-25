@@ -31,11 +31,15 @@ typedef char DirEntry[MAX_FNAME_SIZE + sizeof(int)];//an entry in the root direc
 typedef struct {int inodeID; int read; int write;} FD;//a file descriptor
 typedef struct {enum mode mode; int size; int pointers[13];} Inode;
 
-//In-memory data structures
+/*In-memory data structures*/
 int inodeTbl[MAX_FILES];//Inode Table cache (holds up to 256 inodes)
-DirEntry dir[MAX_FILES];//Directory cache. (holds up to 256 files)
+//Directory cache. (holds up to 256 files)
+//an entry in the directory is in format [filename|inodeId]
+char dir[MAX_FILES][MAX_FNAME_SIZE + sizeof(int)];
 int dir_ptr = 0;
+
 FD oft[MAX_FILES];//Open File Descriptor Table (holds up to 256 open files)
+
 unsigned int freeMap[MAX_FILES / sizeof(int)];//Free Block Bitmap (256 / 32 = 8)
 
 //function declarations
@@ -51,9 +55,27 @@ static void freeBitmap_init();
 
 static int allocBlk(int *buf);
 
+/*Not linking the math lib in case you're using bash file to auto-grade*/
 static int min(int x, int y) {
   if (x < y) return x;
   else return y;
+}
+
+int sfs_getnextfilename(char *fname) {
+  //check, starting at dir_ptr, each entry in the directory table for a valid file name
+  for (int entriesChecked = 0; entriesChecked < MAX_FILES; ++entriesChecked) {
+    char *entry = dir[dir_ptr];
+    dir_ptr = (dir_ptr + 1) % MAX_FILES;
+    if (entry[0] != '\0') {
+      memcpy(fname, entry, MAX_FNAME_SIZE);
+      return 0;
+    }
+  }
+  return -1;
+}
+
+int sfs_getfilesize(const char* path) {
+
 }
 
 void mksfs(int fresh) {
