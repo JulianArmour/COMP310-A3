@@ -45,11 +45,11 @@ unsigned int freeMap[MAX_FILES / sizeof(int)];//Free Block Bitmap (256 / 32 = 8)
 //function declarations
 static void inodeTbl_init();
 
-static void openFileTbl_init();
+static void oft_init();
 
 static Inode fetchInode(int inodeId);
 
-static void dirCache_init();
+static void dir_init();
 
 static void freeBitmap_init();
 
@@ -76,11 +76,20 @@ int sfs_getnextfilename(char *fname) {
 }
 
 /*Searches for a file with the name fname in the directory. If found, return's it's index, else returns -1.*/
-static int searchFile(const char *fname) {
+static int dir_find(const char *fname) {
   //check each entry in the directory
   for (int dirIndex = 0; dirIndex < MAX_FILES; ++dirIndex) {
     if (memcmp(fname, dir[dirIndex], MAX_FNAME_SIZE) == 0)
       return dirIndex;
+  }
+  return -1;
+}
+
+/*Searches for a free entry in the dir cache and returns its index. returns -1 on failure.*/
+static int dir_findFree(const char *fname) {
+  for (int dirEntry = 0; dirEntry < MAX_FILES; ++dirEntry) {
+    if (dir[dirEntry][0] == '\0')// '\0' as the first character denotes an unused entry
+      return dirEntry;
   }
   return -1;
 }
@@ -119,6 +128,16 @@ static int inodeTbl_findFree() {
   return -1;
 }
 
+
+static void inodeTbl_flush() {
+  write_blocks(INODE_BLK, INODE_BLKS, inodeTbl);
+}
+
+static void dir_flush() {
+  oft[0].write = 0;//set root directory's write ptr to beginning of file
+  sfs_fwrite(0, (char *) dir, sizeof(dir));
+}
+
 /*Creates a file with the given name and returns it's inodeID, or -1 on failure.*/
 static int createFile(char* name) {
   int newInodeID = inodeTbl_findFree();
@@ -126,7 +145,10 @@ static int createFile(char* name) {
   //allocate a block for the inode
   int inodeBlock;
   if ((inodeBlock = allocBlk()) == -1) return -1;
-  inodeTbl_reserve(newInodeID, inodeBlock);
+  //reserve the inode
+  inodeTbl[newInodeID] = inodeBlock;
+  inodeTbl_flush();
+
 }
 
 /*Opens a file with the given name, tries to create a new file if it does not exist. Returns a File Descriptor ID >= 0.
@@ -134,7 +156,7 @@ static int createFile(char* name) {
 int sfs_fopen(char *name) {
   int inodeID;
   //search for file name
-  int fileDirIndex = searchFile(name);
+  int fileDirIndex = dir_find(name);
   //check if file exists
   if (fileDirIndex == -1) {//file doesn't exist
     inodeID = createFile(name);
@@ -182,7 +204,7 @@ int sfs_fwseek(int fileID, int loc) {
 /*given the file name path, returns the size of the file. returns -1 if the file doesn't exist.*/
 int sfs_getfilesize(const char* path) {
   //search directory for file name `path`
-  int dirEntryIndex = searchFile(path);
+  int dirEntryIndex = dir_find(path);
   if (dirEntryIndex == -1) return -1;//file does not exist
   int inodeId = inodeID_from_dirIndex(dirEntryIndex);
   Inode fileInode = fetchInode(inodeId);
@@ -227,8 +249,8 @@ void mksfs(int fresh) {
   }
   inodeTbl_init();//loads inode table into memory (cache)
   //load an open file descriptor table, with only the root DIR opened at index 0.
-  openFileTbl_init();
-  dirCache_init();//loads directory into memory (cache)
+  oft_init();
+  dir_init();//loads directory into memory (cache)
   freeBitmap_init();//loads the Free Data Block Bitmap into memory (cache)
 }
 
@@ -408,14 +430,14 @@ static int allocBlk() {
 }
 
 /*Initializes the directory cache by reading the directory contents from the disk.*/
-static void dirCache_init() {
+static void dir_init() {
   oft[0].read = 0;//set root dir's read pointer to beginning of file
   sfs_fread(0, (char *)dir, sizeof(dir));
 }
 
 /*Initializes the Open File Descriptor Table (OFT) in-memory data structure.
  * After initialization, the OFT will only contain 1 open file, the root directory.*/
-static void openFileTbl_init() {
+static void oft_init() {
   //open the root dir file at initialization
   oft[0].inodeID = ROOT_DIR_INODE;
   oft[0].read = 0;
