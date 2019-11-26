@@ -25,11 +25,11 @@ static const int FREE_BM_BLK = 2;//the free block bitmap's block address
 static const int ROOT_DIR_INODE = 0;//the inode id (index in the inode tbl) for the root directory
 static const int MAX_FILES = 256;//maximum number of files sfs can create (including root)
 static const int MAX_FILE_SIZE = BLOCK_BYTES * 268;//inode can hold 268 data blocks
+static const int MODE_DIR = 1;//Directory file mode
+static const int MODE_BASIC = 2;//Basic file mode
 
-enum mode {MODE_DIR, MODE_BASIC};
-typedef char DirEntry[MAX_FNAME_SIZE + sizeof(int)];//an entry in the root directory [filename|inodeId]
 typedef struct {int inodeID; int read; int write;} FD;//a file descriptor
-typedef struct {enum mode mode; int size; int pointers[13];} Inode;
+typedef struct {int mode; int size; int pointers[13];} Inode;
 
 /*In-memory data structures*/
 int inodeTbl[MAX_FILES];//Inode Table cache (holds up to 256 inodes)
@@ -55,12 +55,13 @@ static void freeBitmap_init();
 
 static int allocBlk(int *buf);
 
-/*Not linking the math lib in case you're using bash file to auto-grade*/
+/*Not depending on the math lib in case you're using bash file to auto-grade*/
 static int min(int x, int y) {
   if (x < y) return x;
   else return y;
 }
 
+/*Places the name of the next file in the directory in fname. Returns 0 on success, -1 on failure*/
 int sfs_getnextfilename(char *fname) {
   //check, starting at dir_ptr, each entry in the directory table for a valid file name
   for (int entriesChecked = 0; entriesChecked < MAX_FILES; ++entriesChecked) {
@@ -74,8 +75,25 @@ int sfs_getnextfilename(char *fname) {
   return -1;
 }
 
-int sfs_getfilesize(const char* path) {
+/*Searches for a file with the name fname in the directory. If found, return's it's index, else returns -1.*/
+int searchFile(const char *fname) {
+  //check each entry in the directory
+  for (int dirIndex = 0; dirIndex < MAX_FILES; ++dirIndex) {
+    if (memcmp(fname, dir[dirIndex], MAX_FNAME_SIZE) == 0)
+      return dirIndex;
+  }
+  return -1;
+}
 
+/*given the file name path, returns the size of the file. returns -1 if the file doesn't exist.*/
+int sfs_getfilesize(const char* path) {
+  //search directory for path
+  int dirEntryIndex = searchFile(path);
+  if (dirEntryIndex == -1) return -1;//file does not exist
+  char *entry = dir[dirEntryIndex];
+  int *inodeId = (int *) (entry + MAX_FNAME_SIZE);
+  Inode fileInode = fetchInode(*inodeId);
+  return fileInode.size;
 }
 
 void mksfs(int fresh) {
