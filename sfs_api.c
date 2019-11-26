@@ -85,14 +85,30 @@ int searchFile(const char *fname) {
   return -1;
 }
 
+/*returns the inode ID from the entry at dirIndex in the root directory.*/
+int inodeID_from_dirIndex(int dirIndex) {
+  char *entry = dir[dirIndex];
+  int *inodeIdPtr = (int *) (entry + MAX_FNAME_SIZE);
+  return *inodeIdPtr;
+}
+
+/*Opens a file with the given name, returns a File Descriptor ID >= 0. returns -1 on failure.*/
+int sfs_fopen(char *name) {
+  //search for file name
+  int fileDirIndex = searchFile(name);
+  //get it's inode ID
+  //find a free slot in the OFT
+  //place in free slot
+  //return index of slot
+}
+
 /*given the file name path, returns the size of the file. returns -1 if the file doesn't exist.*/
 int sfs_getfilesize(const char* path) {
-  //search directory for path
+  //search directory for file name `path`
   int dirEntryIndex = searchFile(path);
   if (dirEntryIndex == -1) return -1;//file does not exist
-  char *entry = dir[dirEntryIndex];
-  int *inodeId = (int *) (entry + MAX_FNAME_SIZE);
-  Inode fileInode = fetchInode(*inodeId);
+  int inodeId = inodeID_from_dirIndex(dirEntryIndex);
+  Inode fileInode = fetchInode(inodeId);
   return fileInode.size;
 }
 
