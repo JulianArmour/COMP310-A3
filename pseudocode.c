@@ -161,7 +161,7 @@ int closesfs() {
 }
 
 
-int Fsfs_fopen(char *name) {
+int fsfs_fopen(char *name) {
   int fileInode;
   if ((fileInode = dirTbl_getInode(name)) <= 0) {//file doesn't exist
     fileInode = inodeTbl_findFree();//find free inode

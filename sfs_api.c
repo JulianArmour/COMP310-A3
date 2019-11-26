@@ -76,7 +76,7 @@ int sfs_getnextfilename(char *fname) {
 }
 
 /*Searches for a file with the name fname in the directory. If found, return's it's index, else returns -1.*/
-int searchFile(const char *fname) {
+static int searchFile(const char *fname) {
   //check each entry in the directory
   for (int dirIndex = 0; dirIndex < MAX_FILES; ++dirIndex) {
     if (memcmp(fname, dir[dirIndex], MAX_FNAME_SIZE) == 0)
@@ -86,14 +86,14 @@ int searchFile(const char *fname) {
 }
 
 /*returns the inode ID from the entry at dirIndex in the root directory.*/
-int inodeID_from_dirIndex(int dirIndex) {
+static int inodeID_from_dirIndex(int dirIndex) {
   char *entry = dir[dirIndex];
   int *inodeIdPtr = (int *) (entry + MAX_FNAME_SIZE);
   return *inodeIdPtr;
 }
 
 /*returns the index of a free slot in oft (Open File Table). Returns -1 if all slots are taken.*/
-int oft_findFreeSlot() {
+static int oft_findFree() {
   for (int entry = 0; entry < MAX_FILES; ++entry) {
     FD fd = oft[entry];
     if (fd.inodeID == -1)//this fd entry is unused
@@ -102,17 +102,41 @@ int oft_findFreeSlot() {
   return -1;
 }
 
-//TODO add create file in here
+static int oft_find(int inodeID) {
+  for (int entry = 0; entry < MAX_FILES; ++entry) {
+    if (oft[entry].inodeID == inodeID)
+      return entry;
+  }
+  return -1;
+}
+
+/*Creates a file with the given name and returns it's inodeID, or -1 on failure.*/
+static int createFile(char* name) {
+  int newInodeID = inodeTbl_findFree();
+  if (newInodeID < 0) return -1;//no more free inodes
+  //allocate a block for the inode
+  int inodeBlock;
+  if (allocBlk(&inodeBlock) == -1) return -1;
+
+}
+
 /*Opens a file with the given name, tries to create a new file if it does not exist. Returns a File Descriptor ID >= 0.
  * returns -1 on failure.*/
 int sfs_fopen(char *name) {
+  int inodeID;
   //search for file name
   int fileDirIndex = searchFile(name);
-  if (fileDirIndex == -1) return -1;//file doesn't exist
-  //get it's inode ID
-  int inodeID = inodeID_from_dirIndex(fileDirIndex);
+  //check if file exists
+  if (fileDirIndex == -1) {//file doesn't exist
+    inodeID = createFile(name);
+    if (inodeID < 0) return -1;//error creating file
+  } else {//file exists
+    //get it's inode ID
+    inodeID = inodeID_from_dirIndex(fileDirIndex);
+    if (oft_find(inodeID) != -1) return -1;//file is already open
+  }
   //find a free slot in the OFT
-  int freeOFTSlot = oft_findFreeSlot();
+  int freeOFTSlot = oft_findFree();
   if (freeOFTSlot == -1) return -1;//OFT is full
   //place data in free slot
   Inode fileInode = fetchInode(inodeID);
@@ -349,8 +373,8 @@ static void freeMap_flush() {
   write_blocks(FREE_BM_BLK, 1, (char *) freeMap);
 }
 
-/*allocates a data block and writes its address to buf. Returns 0 on success, -1 on failure.*/
-static int allocBlk(int *buf) {
+/*allocates a data block and writes its address to buf. Returns the block number on success, -1 on failure.*/
+static int allocBlk() {
   int addr = 0;
   //iterate over each int buffer in the freeMap cache
   for (unsigned long i = 0; i < (sizeof(freeMap) / sizeof(int)); ++i) {
@@ -359,10 +383,9 @@ static int allocBlk(int *buf) {
       unsigned int mask = 0x80000000;//0b10000000...0
       for (unsigned long j = 0; j < 8 * sizeof(int); ++j) {
         if (freeMap[i] & mask) {//block at address 'addr' is free
-          *buf = addr;
           freeMap[i] |= mask;//reserve block in free bitmap by marking the bit
           freeMap_flush();
-          return 0;
+          return addr;
         } else {//block at address 'addr' not free, try next block
           mask >>= (unsigned int) 1;
           addr++;
@@ -372,7 +395,6 @@ static int allocBlk(int *buf) {
       addr += 8 * sizeof(int);
     }
   }
-  *buf = -1;
   return -1;
 }
 
