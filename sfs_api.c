@@ -92,11 +92,23 @@ int inodeID_from_dirIndex(int dirIndex) {
   return *inodeIdPtr;
 }
 
+/*returns the index of a free slot in oft (Open File Table). Returns -1 if all slots are taken.*/
+int oft_findFreeSlot() {
+  for (int entry = 0; entry < MAX_FILES; ++entry) {
+    FD fd = oft[entry];
+    if (fd.inodeID == -1)//this fd entry is unused
+      return entry;
+  }
+  return -1;
+}
+
 /*Opens a file with the given name, returns a File Descriptor ID >= 0. returns -1 on failure.*/
 int sfs_fopen(char *name) {
   //search for file name
   int fileDirIndex = searchFile(name);
+  if (fileDirIndex == -1) return -1;
   //get it's inode ID
+  int inodeID = inodeID_from_dirIndex(fileDirIndex);
   //find a free slot in the OFT
   //place in free slot
   //return index of slot
