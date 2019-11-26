@@ -126,16 +126,24 @@ int sfs_fopen(char *name) {
 /*closes an opened file. Returns 0 on success, -1 on failure.*/
 int sfs_fclose(int fileID) {
   if (fileID < 0 || MAX_FILES <= fileID) return -1;//fileID out of permitted bounds
-  //verify that the file is open.
-  if (oft[fileID].inodeID < 0) return -1;
+  if (oft[fileID].inodeID < 0) return -1;//verify that the file is open.
   //file is open, close it.
   oft[fileID].inodeID = -1;// -1 denotes that the file is closed
   return 0;
 }
 
+/*Moves the open file's read pointer to the location loc*/
 int sfs_frseek(int fileID, int loc) {
-  if (fileID <= 0) return -1;
+  if (fileID < 0 || MAX_FILES <= fileID) return -1;//fileID out of permitted bounds
+  oft[fileID].read = loc;
+  return 0;
+}
 
+/*Moves the open file's write pointer to the location loc*/
+int sfs_fwseek(int fileID, int loc) {
+  if (fileID < 0 || MAX_FILES <= fileID) return -1;//fileID out of permitted bounds
+  oft[fileID].write = loc;
+  return 0;
 }
 
 /*given the file name path, returns the size of the file. returns -1 if the file doesn't exist.*/
