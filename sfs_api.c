@@ -106,12 +106,19 @@ int oft_findFreeSlot() {
 int sfs_fopen(char *name) {
   //search for file name
   int fileDirIndex = searchFile(name);
-  if (fileDirIndex == -1) return -1;
+  if (fileDirIndex == -1) return -1;//file doesn't exist
   //get it's inode ID
   int inodeID = inodeID_from_dirIndex(fileDirIndex);
   //find a free slot in the OFT
-  //place in free slot
-  //return index of slot
+  int freeOFTSlot = oft_findFreeSlot();
+  if (freeOFTSlot == -1) return -1;//OFT is full
+  //place data in free slot
+  Inode fileInode = fetchInode(inodeID);
+  oft[freeOFTSlot].inodeID = inodeID;
+  oft[freeOFTSlot].write = fileInode.size;
+  oft[freeOFTSlot].read = 0;
+  //return index of slot (FD handle)
+  return freeOFTSlot;
 }
 
 /*given the file name path, returns the size of the file. returns -1 if the file doesn't exist.*/
