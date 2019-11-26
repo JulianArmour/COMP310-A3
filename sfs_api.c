@@ -121,6 +121,15 @@ int sfs_fopen(char *name) {
   return freeOFTSlot;
 }
 
+int sfs_fclose(int fileID) {
+  //verify that the file is open AND it's not the root dir file (inode=0).
+  if (oft[fileID].inodeID > 0) {
+    oft[fileID].inodeID = -1;
+    return 0;
+  }
+  return -1;
+}
+
 /*given the file name path, returns the size of the file. returns -1 if the file doesn't exist.*/
 int sfs_getfilesize(const char* path) {
   //search directory for file name `path`
