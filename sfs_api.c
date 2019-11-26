@@ -53,7 +53,7 @@ static void dirCache_init();
 
 static void freeBitmap_init();
 
-static int allocBlk(int *buf);
+static int allocBlk();
 
 /*Not depending on the math lib in case you're using bash file to auto-grade*/
 static int min(int x, int y) {
@@ -110,14 +110,23 @@ static int oft_find(int inodeID) {
   return -1;
 }
 
+/*Finds and returns the ID of a free inode in the inode table. -1 on failure.*/
+static int inodeTbl_findFree() {
+  for (int inodeID = 0; inodeID < MAX_FILES; ++inodeID) {
+    if (inodeTbl[inodeID] <= 0)// (-inf,0] means free
+      return inodeID;
+  }
+  return -1;
+}
+
 /*Creates a file with the given name and returns it's inodeID, or -1 on failure.*/
 static int createFile(char* name) {
   int newInodeID = inodeTbl_findFree();
   if (newInodeID < 0) return -1;//no more free inodes
   //allocate a block for the inode
   int inodeBlock;
-  if (allocBlk(&inodeBlock) == -1) return -1;
-
+  if ((inodeBlock = allocBlk()) == -1) return -1;
+  inodeTbl_reserve(newInodeID, inodeBlock);
 }
 
 /*Opens a file with the given name, tries to create a new file if it does not exist. Returns a File Descriptor ID >= 0.
@@ -326,12 +335,12 @@ int sfs_fwrite(int fileID, char *buf, int length) {
     //get blockNum for inodePointer, allocate blocks as needed
     if (inodePointer < 12) {//none-indirect pointer
       if (inode.pointers[inodePointer] <= 0)//no block already allocated
-        if(allocBlk(&inode.pointers[inodePointer]))//allocate 1 block
+        if((inode.pointers[inodePointer] = allocBlk()) < 0)//allocate 1 block
           return bufIndex;//disk out of memory
       blockNum = inode.pointers[inodePointer];
     } else {//indirect pointer
       if (inode.pointers[12] <= 0)//no block already allocated
-        if(allocBlk(&inode.pointers[12]))//allocate 1 block
+        if((inode.pointers[12] = allocBlk()) < 0)//allocate 1 block
           return bufIndex;//disk out of memory
       //read indirect block into memory
       read_blocks(inode.pointers[12], 1, blockBuff);
@@ -339,7 +348,7 @@ int sfs_fwrite(int fileID, char *buf, int length) {
       int *indirectBlock = (int *) blockBuff;
       int indirectPointer = inodePointer - 12;
       if (indirectBlock[indirectPointer] <= 0) {//no block already allocated
-        if (allocBlk(&indirectBlock[indirectPointer]))
+        if ((indirectBlock[indirectPointer] = allocBlk()) < 0)
           return bufIndex;//disk out of memory
         write_blocks(indirectBlock[indirectPointer], 1, blockBuff);
       }
