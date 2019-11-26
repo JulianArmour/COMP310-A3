@@ -102,7 +102,9 @@ int oft_findFreeSlot() {
   return -1;
 }
 
-/*Opens a file with the given name, returns a File Descriptor ID >= 0. returns -1 on failure.*/
+//TODO add create file in here
+/*Opens a file with the given name, tries to create a new file if it does not exist. Returns a File Descriptor ID >= 0.
+ * returns -1 on failure.*/
 int sfs_fopen(char *name) {
   //search for file name
   int fileDirIndex = searchFile(name);
@@ -121,13 +123,19 @@ int sfs_fopen(char *name) {
   return freeOFTSlot;
 }
 
+/*closes an opened file. Returns 0 on success, -1 on failure.*/
 int sfs_fclose(int fileID) {
-  //verify that the file is open AND it's not the root dir file (inode=0).
-  if (oft[fileID].inodeID > 0) {
-    oft[fileID].inodeID = -1;
-    return 0;
-  }
-  return -1;
+  if (fileID < 0 || MAX_FILES <= fileID) return -1;//fileID out of permitted bounds
+  //verify that the file is open.
+  if (oft[fileID].inodeID < 0) return -1;
+  //file is open, close it.
+  oft[fileID].inodeID = -1;// -1 denotes that the file is closed
+  return 0;
+}
+
+int sfs_frseek(int fileID, int loc) {
+  if (fileID <= 0) return -1;
+
 }
 
 /*given the file name path, returns the size of the file. returns -1 if the file doesn't exist.*/
@@ -218,6 +226,7 @@ static Inode fetchInode(int inodeId) {
 
 /*Given a fileID, reads in length bytes from the file to buf*/
 int sfs_fread(int fileID, char *buf, int length) {
+  if (fileID < 0 || MAX_FILES <= fileID) return 0;//fileID out of permitted bounds
   FD file = oft[fileID];
   if (file.inodeID < 0) return 0;//file is not open
   Inode inode = fetchInode(file.inodeID);
@@ -269,6 +278,7 @@ int sfs_fread(int fileID, char *buf, int length) {
 
 /*Given a fileID, writes length bytes from buf to the file*/
 int sfs_fwrite(int fileID, char *buf, int length) {
+  if (fileID < 0 || MAX_FILES <= fileID) return 0;//fileID out of permitted bounds
   FD file = oft[fileID];
   Inode inode = fetchInode(file.inodeID);
   //if write query exceeds maximum file size
