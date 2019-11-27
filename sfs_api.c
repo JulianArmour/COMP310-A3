@@ -49,6 +49,8 @@ static void oft_init();
 
 static Inode fetchInode(int inodeId);
 
+static void flushInode(int inodeID, Inode inode);
+
 static void dir_init();
 
 static void freeBitmap_init();
@@ -86,7 +88,7 @@ static int dir_find(const char *fname) {
 }
 
 /*Searches for a free entry in the dir cache and returns its index. returns -1 on failure.*/
-static int dir_findFree(const char *fname) {
+static int dir_findFree() {
   for (int dirEntry = 0; dirEntry < MAX_FILES; ++dirEntry) {
     if (dir[dirEntry][0] == '\0')// '\0' as the first character denotes an unused entry
       return dirEntry;
@@ -138,17 +140,27 @@ static void dir_flush() {
   sfs_fwrite(0, (char *) dir, sizeof(dir));
 }
 
-/*Creates a file with the given name and returns it's inodeID, or -1 on failure.*/
+/*Creates a file with the given name and returns it's inode ID, or -1 on failure.*/
 static int createFile(char* name) {
   int newInodeID = inodeTbl_findFree();
+  int freeDirEntry = dir_findFree();
   if (newInodeID < 0) return -1;//no more free inodes
+  if (freeDirEntry < 0) return -1;//no more room in directory
   //allocate a block for the inode
   int inodeBlock;
-  if ((inodeBlock = allocBlk()) == -1) return -1;
+  if ((inodeBlock = allocBlk()) == -1) return -1;//failed to allocate block
   //reserve the inode
   inodeTbl[newInodeID] = inodeBlock;
   inodeTbl_flush();
-
+  //reserve directory entry
+  memcpy(dir[freeDirEntry], name, 20);
+  memcpy(&dir[freeDirEntry][20], &newInodeID, sizeof(int));
+  dir_flush();
+  //set inode metadata
+  Inode newInode;
+  newInode.mode = MODE_BASIC;
+  flushInode(newInodeID, newInode);
+  return newInodeID;
 }
 
 /*Opens a file with the given name, tries to create a new file if it does not exist. Returns a File Descriptor ID >= 0.
@@ -260,7 +272,7 @@ void static freeBitmap_init() {
 }
 
 /*Updates the on-disk inode data-structure with in-memory inode.*/
-void flushInode(int inodeID, Inode inode) {
+static void flushInode(int inodeID, Inode inode) {
   int blk[BLOCK_BYTES / sizeof(int)];
   int inodeBlkAddr = inodeTbl[inodeID];
   read_blocks(inodeBlkAddr, 1, (char *) blk);
