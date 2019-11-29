@@ -40,7 +40,7 @@ int dir_ptr = 0;
 
 FD oft[MAX_FILES];//Open File Descriptor Table (holds up to 256 open files)
 
-unsigned int freeMap[MAX_FILES / sizeof(int)];//Free Block Bitmap (256 / 32 = 8)
+unsigned int freeMap[BLOCK_COUNT / (sizeof(int)*8)];//Free Block Bitmap (256 / 32 = 8)
 
 //function declarations
 static void inodeTbl_init();
@@ -439,6 +439,19 @@ static int allocBlk() {
     }
   }
   return -1;
+}
+
+static void freeBlk(int blockNum) {
+  int chunk = blockNum / (sizeof(int) * 8);
+  unsigned int chunkOffset = blockNum % (sizeof(int) * 8);
+  //bit-mask used to flip bit representing blockNum to 0
+  unsigned int mask = ~((unsigned int)1<<chunkOffset);//111..0..111
+  freeMap[chunk] &= mask;//flip the bit from 1 to 0
+  freeMap_flush();
+}
+
+int sfs_remove(char *file) {
+  int dirEntry = dir_find(file);
 }
 
 /*Initializes the directory cache by reading the directory contents from the disk.*/
