@@ -15,16 +15,20 @@
 #include "disk_emu.h"
 #include <string.h>
 
-static const int MAX_FNAME_SIZE = 20;//maximum length of a file name (including 'period' and 'file extension'
-static const int BLOCK_BYTES = 1024;//size in bytes of a block
-static const int BLOCK_COUNT = 256;//number of disk blocks
-static const int INODE_BLKS = 1;//number of "inode table" blocks
-static const int INODE_BLK = 1;//the Inode Table's block address
-static const int FREE_BM_BLKS = 1;//number of "free bitmap" blocks
-static const int FREE_BM_BLK = 2;//the free block bitmap's block address
-static const int ROOT_DIR_INODE = 0;//the inode id (index in the inode tbl) for the root directory
-static const int MAX_FILES = 256;//maximum number of files sfs can create (including root)
-static const int MAX_FILE_SIZE = BLOCK_BYTES * 268;//inode can hold 268 data blocks
+#define MAX_FNAME_SIZE 20//maximum length of a file name (including 'period' and 'file extension'
+#define BLOCK_BYTES 1024//size in bytes of a block
+#define BLOCK_COUNT 256//number of disk blocks
+#define INODE_BLKS 1//number of "inode table" blocks
+#define INODE_BLK 1//the Inode Table's block address
+#define FREE_BM_BLKS 1//number of "free bitmap" blocks
+#define FREE_BM_BLK 2//the free block bitmap's block address
+#define ROOT_DIR_INODE 0//the inode id (index in the inode tbl) for the root directory
+#define MAX_FILES 256//maximum number of files sfs can create (including root)
+#define MAX_FILE_SIZE 274432//inode can hold 268 data blocks (1024*268 = 274,432)
+#define DIR_ENTRY_BYTES 24//filename_bytes(20) + int_bytes(4)
+#define FREE_MAP_CHUNKS 8//size of int[] needed to hold BLOCK_COUNT bits
+
+//File modes.
 static const int MODE_DIR = 1;//Directory file mode
 static const int MODE_BASIC = 2;//Basic file mode
 
@@ -32,22 +36,22 @@ typedef struct {int inodeID; int read; int write;} FD;//a file descriptor
 typedef struct {int mode; int size; int pointers[13];} Inode;
 
 /*In-memory data structures*/
-int inodeTbl[MAX_FILES];//Inode Table cache (holds up to 256 inodes)
+static int inodeTbl[MAX_FILES];//Inode Table cache (holds up to 256 inodes)
 //Directory cache. (holds up to 256 files)
 //an entry in the directory is in format [filename|inodeId]
-char dir[MAX_FILES][MAX_FNAME_SIZE + sizeof(int)];
-int dir_ptr = 0;
-
-FD oft[MAX_FILES];//Open File Descriptor Table (holds up to 256 open files)
-
-unsigned int freeMap[BLOCK_COUNT / (sizeof(int)*8)];//Free Block Bitmap (256 / 32 = 8)
+static char dir[MAX_FILES][DIR_ENTRY_BYTES];
+static int dir_ptr = 0;
+//Open File Descriptor Table (holds up to 256 open files)
+static FD oft[MAX_FILES];
+//Free Block Bitmap
+static unsigned int freeMap[FREE_MAP_CHUNKS];
 
 //necessary function declarations
 static Inode fetchInode(int inodeId);
 static void flushInode(int inodeID, Inode inode);
 static int allocBlk();
 
-/*Not depending on the math lib in case you're using bash file to auto-grade*/
+/*Not depending on the math lib in case a bash file auto-grader is being used*/
 static int min(int x, int y) {
   if (x < y) return x;
   else return y;
@@ -228,9 +232,9 @@ static void oft_init() {
   oft[0].write = fetchInode(ROOT_DIR_INODE).size;
   //all other entries are set to closed
   for (int i = 1; i < MAX_FILES; ++i) {
-    oft[0].inodeID = -1;
-    oft[0].read = 0;
-    oft[0].write = 0;
+    oft[i].inodeID = -1;
+    oft[i].read = 0;
+    oft[i].write = 0;
   }
 }
 

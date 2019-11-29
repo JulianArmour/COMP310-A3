@@ -1,6 +1,5 @@
 #ifndef SFS_API_H
 #define SFS_API_H
-
 void mksfs(int fresh); // creates the file system
 int sfs_GetFileSize(char *fname); // get the name of the next file in directory
 int sfs_get_next_filename(const char *path); // get the size of the given file
@@ -11,5 +10,4 @@ int sfs_fwseek(int fileID, int loc); // seek (Write) to the location from beginn
 int sfs_fwrite(int fileID, char *buf, int length); // write buf characters into disk
 int sfs_fread(int fileID, char *buf, int length); // read characters from disk into buf
 int sfs_remove(char *file); // removes a file from the filesystem
-
 #endif
