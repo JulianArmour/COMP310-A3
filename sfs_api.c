@@ -442,7 +442,13 @@ static int allocBlk() {
 }
 
 static void freeBlk(int blockNum) {
+  //used to clear data in the block being freed
+  static char blank[BLOCK_BYTES];//static declaration ensures all entries are initialized to 0
+  //clear the block's data
+  write_blocks(blockNum, 1, blank);
+  //get the index (chunk) in the freeMap cache
   int chunk = blockNum / (sizeof(int) * 8);
+  //get the bit in the chunk that represents to block
   unsigned int chunkOffset = blockNum % (sizeof(int) * 8);
   //bit-mask used to flip bit representing blockNum to 0
   unsigned int mask = ~((unsigned int)1<<chunkOffset);//111..0..111
@@ -452,6 +458,13 @@ static void freeBlk(int blockNum) {
 
 int sfs_remove(char *file) {
   int dirEntry = dir_find(file);
+  if (dirEntry < 0) return -1;
+  int inodeID = inodeID_from_dirIndex(dirEntry);
+  Inode inode = fetchInode(inodeID);
+  //free direct pointer blocks
+  for (int pointer = 0; pointer < 12; ++pointer) {
+    freeBlk(inode.pointers[pointer]);
+  }
 }
 
 /*Initializes the directory cache by reading the directory contents from the disk.*/
