@@ -158,8 +158,8 @@ main(int argc, char **argv)
 
   fds[1] = sfs_fopen(names[1]);
 
-  sfs_frseek(0, 0);
-  sfs_frseek(1, 0);
+  sfs_frseek(fds[0], 0);//TODO add to errata
+  sfs_frseek(fds[1], 0);
 
   for (i = 0; i < 2; i++) {
     for (j = 0; j < filesize[i]; j += chunksize) {

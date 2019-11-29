@@ -141,8 +141,8 @@ static int createFile(char* name) {
   if (newInodeID < 0) return -1;//no more free inodes
   if (freeDirEntry < 0) return -1;//no more room in directory
   //allocate a block for the inode
-  int inodeBlock;
-  if ((inodeBlock = allocBlk()) == -1) return -1;//failed to allocate block
+  int inodeBlock = allocBlk();
+  if (inodeBlock == -1) return -1;//failed to allocate block
   //reserve the inode
   inodeTbl[newInodeID] = inodeBlock;
   inodeTbl_flush();
@@ -151,8 +151,7 @@ static int createFile(char* name) {
   memcpy(&dir[freeDirEntry][20], &newInodeID, sizeof(int));
   dir_flush();
   //set inode metadata
-  Inode newInode;
-  newInode.mode = MODE_BASIC;
+  Inode newInode = {MODE_BASIC};
   flushInode(newInodeID, newInode);
   return newInodeID;
 }
@@ -445,7 +444,7 @@ static int allocBlk() {
     if ((~freeMap[i]) > 0) {//one of the bits is 0
       unsigned int mask = 0x80000000;//0b10000000...0
       for (unsigned long j = 0; j < 8 * sizeof(int); ++j) {
-        if (freeMap[i] & mask) {//block at address 'addr' is free
+        if (~freeMap[i] & mask) {//block at address 'addr' is free
           freeMap[i] |= mask;//reserve block in free bitmap by marking the bit
           freeMap_flush();
           return addr;
