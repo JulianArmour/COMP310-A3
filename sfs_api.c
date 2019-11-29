@@ -42,19 +42,9 @@ FD oft[MAX_FILES];//Open File Descriptor Table (holds up to 256 open files)
 
 unsigned int freeMap[BLOCK_COUNT / (sizeof(int)*8)];//Free Block Bitmap (256 / 32 = 8)
 
-//function declarations
-static void inodeTbl_init();
-
-static void oft_init();
-
+//necessary function declarations
 static Inode fetchInode(int inodeId);
-
 static void flushInode(int inodeID, Inode inode);
-
-static void dir_init();
-
-static void freeBitmap_init();
-
 static int allocBlk();
 
 /*Not depending on the math lib in case you're using bash file to auto-grade*/
@@ -64,7 +54,7 @@ static int min(int x, int y) {
 }
 
 /*Places the name of the next file in the directory in fname. Returns 0 on success, -1 on failure*/
-int sfs_getnextfilename(char *fname) {
+int sfs_GetFileSize(char *fname) {
   //check, starting at dir_ptr, each entry in the directory table for a valid file name
   for (int entriesChecked = 0; entriesChecked < MAX_FILES; ++entriesChecked) {
     char *entry = dir[dir_ptr];
@@ -214,13 +204,45 @@ int sfs_fwseek(int fileID, int loc) {
 }
 
 /*given the file name path, returns the size of the file. returns -1 if the file doesn't exist.*/
-int sfs_getfilesize(const char* path) {
+int sfs_get_next_filename(const char* path) {
   //search directory for file name `path`
   int dirEntryIndex = dir_find(path);
   if (dirEntryIndex == -1) return -1;//file does not exist
   int inodeId = inodeID_from_dirIndex(dirEntryIndex);
   Inode fileInode = fetchInode(inodeId);
   return fileInode.size;
+}
+
+/*Initializes the directory cache by reading the directory contents from the disk.*/
+static void dir_init() {
+  oft[0].read = 0;//set root dir's read pointer to beginning of file
+  sfs_fread(0, (char *)dir, sizeof(dir));
+}
+
+/*Initializes the Open File Descriptor Table (OFT) in-memory data structure.
+ * After initialization, the OFT will only contain 1 open file, the root directory.*/
+static void oft_init() {
+  //open the root dir file at initialization
+  oft[0].inodeID = ROOT_DIR_INODE;
+  oft[0].read = 0;
+  oft[0].write = fetchInode(ROOT_DIR_INODE).size;
+  //all other entries are set to closed
+  for (int i = 1; i < MAX_FILES; ++i) {
+    oft[0].inodeID = -1;
+    oft[0].read = 0;
+    oft[0].write = 0;
+  }
+}
+
+/*Initializes the inode table cache by reading the inode table from the disk.*/
+static void inodeTbl_init() {
+  memset(inodeTbl, 0, sizeof(inodeTbl));
+  read_blocks(INODE_BLK, 1, inodeTbl);
+}
+
+/*Initializes the Free Bitmap cache by reading the disk's version of it.*/
+void static freeBitmap_init() {
+  read_blocks(FREE_BM_BLK, FREE_BM_BLKS, freeMap);
 }
 
 void mksfs(int fresh) {
@@ -260,15 +282,9 @@ void mksfs(int fresh) {
     init_disk("sfs", BLOCK_BYTES, BLOCK_COUNT);
   }
   inodeTbl_init();//loads inode table into memory (cache)
-  //load an open file descriptor table, with only the root DIR opened at index 0.
-  oft_init();
+  oft_init();//load an open file descriptor table (oft), with only the root directory opened at index 0.
   dir_init();//loads directory into memory (cache)
   freeBitmap_init();//loads the Free Data Block Bitmap into memory (cache)
-}
-
-/*Initializes the Free Bitmap cache by reading the disk's version of it.*/
-void static freeBitmap_init() {
-  read_blocks(FREE_BM_BLK, FREE_BM_BLKS, freeMap);
 }
 
 /*Updates the on-disk inode data-structure with in-memory inode.*/
@@ -463,33 +479,25 @@ int sfs_remove(char *file) {
   Inode inode = fetchInode(inodeID);
   //free direct pointer blocks
   for (int pointer = 0; pointer < 12; ++pointer) {
-    freeBlk(inode.pointers[pointer]);
+    if (inode.pointers[pointer] > 0)//if a block is allocated
+      freeBlk(inode.pointers[pointer]);
   }
-}
-
-/*Initializes the directory cache by reading the directory contents from the disk.*/
-static void dir_init() {
-  oft[0].read = 0;//set root dir's read pointer to beginning of file
-  sfs_fread(0, (char *)dir, sizeof(dir));
-}
-
-/*Initializes the Open File Descriptor Table (OFT) in-memory data structure.
- * After initialization, the OFT will only contain 1 open file, the root directory.*/
-static void oft_init() {
-  //open the root dir file at initialization
-  oft[0].inodeID = ROOT_DIR_INODE;
-  oft[0].read = 0;
-  oft[0].write = fetchInode(ROOT_DIR_INODE).size;
-  //all other entries are set to closed
-  for (int i = 1; i < MAX_FILES; ++i) {
-    oft[0].inodeID = -1;
-    oft[0].read = 0;
-    oft[0].write = 0;
+  //free indirect pointer blocks
+  if (inode.pointers[12] > 0) {//if an indirect block is allocated
+    int buf[BLOCK_BYTES / sizeof(int)];
+    read_blocks(inode.pointers[12], 1, buf);
+    //check each entry
+    for (int indBlkEntry = 0; indBlkEntry < (BLOCK_BYTES / sizeof(int)); ++indBlkEntry) {
+      if (buf[indBlkEntry] > 0)//if a block is allocated
+        freeBlk(buf[indBlkEntry]);
+    }
+    freeBlk(inode.pointers[12]);
   }
-}
-
-/*Initializes the inode table cache by reading the inode table from the disk.*/
-static void inodeTbl_init() {
-  memset(inodeTbl, 0, sizeof(inodeTbl));
-  read_blocks(INODE_BLK, 1, inodeTbl);
+  //free inode block
+  freeBlk(inodeTbl[inodeID]);
+  //free inode table entry
+  inodeTbl[inodeID] = 0;
+  //free dir entry
+  memset(dir[dirEntry], 0, MAX_FNAME_SIZE + sizeof(int));
+  return 0;
 }

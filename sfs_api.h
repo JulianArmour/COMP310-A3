@@ -2,8 +2,8 @@
 #define SFS_API_H
 
 void mksfs(int fresh); // creates the file system
-int sfs_getnextfilename(char *fname); // get the name of the next file in directory
-int sfs_getfilesize(const char *path); // get the size of the given file
+int sfs_GetFileSize(char *fname); // get the name of the next file in directory
+int sfs_get_next_filename(const char *path); // get the size of the given file
 int sfs_fopen(char *name); // opens the given file
 int sfs_fclose(int fileID); // closes the given file
 int sfs_frseek(int fileID, int loc); // seek (Read) to the location from beginning
