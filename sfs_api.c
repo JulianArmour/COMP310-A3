@@ -403,7 +403,7 @@ int sfs_fwrite(int fileID, char *buf, int length) {
       if (indirectBlock[indirectPointer] <= 0) {//no block already allocated
         if ((indirectBlock[indirectPointer] = allocBlk()) < 0)
           return bufIndex;//disk out of memory
-        write_blocks(indirectBlock[indirectPointer], 1, blockBuff);
+        write_blocks(inode.pointers[12], 1, blockBuff);//flush change to disk
       }
       blockNum = indirectBlock[indirectPointer];
     }
@@ -470,7 +470,7 @@ static void freeBlk(int blockNum) {
   //get the bit in the chunk that represents to block
   unsigned int chunkOffset = blockNum % (sizeof(int) * 8);
   //bit-mask used to flip bit representing blockNum to 0
-  unsigned int mask = ~((unsigned int)1<<chunkOffset);//111..0..111
+  unsigned int mask = ~((unsigned int)0x80000000>>chunkOffset);//111..0..111
   freeMap[chunk] &= mask;//flip the bit from 1 to 0
   freeMap_flush();
 }
