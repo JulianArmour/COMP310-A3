@@ -324,10 +324,10 @@ int sfs_fread(int fileID, char *buf, int length) {
   FD file = oft[fileID];
   if (file.inodeID < 0) return 0;//file is not open
   Inode inode = fetchInode(file.inodeID);
-  //if read query exceeds maximum file size
-  if (file.read + length > MAX_FILE_SIZE) {
-    //then set length = remaining file space
-    length = MAX_FILE_SIZE - file.read;
+  //if read query exceeds file size
+  if (file.read + length > inode.size) {
+    //then set length to number of bytes from read pointer to file size
+    length = inode.size - file.read;
   }
   //read into buf from disk block by block.
   int bufIndex = 0;
