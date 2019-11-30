@@ -151,7 +151,7 @@ main(int argc, char **argv)
       }
       free(buffer);
     }
-    int tmp = sfs_GetFileSize(names[i]);
+    int tmp = sfs_getfilesize(names[i]);
     if (filesize[i] != tmp) {
       fprintf(stderr, "ERROR: mismatch file size %d, %d\n", filesize[i], tmp);
       error_count++;
@@ -378,7 +378,7 @@ main(int argc, char **argv)
   printf("Directory listing\n");
   char *filename = (char *)malloc(MAX_FNAME_LENGTH);
   int max = 0;
-  while (sfs_get_next_filename(filename)) {
+  while (sfs_getnextfilename(filename)) {
 	  if (strcmp(filename, names[max]) != 0) {
 	  	printf("ERROR misnamed file %d: %s %s\n", max, filename, names[max]);
 		error_count++;

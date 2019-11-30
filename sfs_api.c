@@ -58,7 +58,7 @@ static int min(int x, int y) {
 }
 
 /*Places the name of the next file in the directory in fname. Returns 0 on success, -1 on failure*/
-int sfs_GetFileSize(char *fname) {
+int sfs_getnextfilename(char *fname) {
   //check, starting at dir_ptr, each entry in the directory table for a valid file name
   for (int entriesChecked = 0; entriesChecked < MAX_FILES; ++entriesChecked) {
     char *entry = dir[dir_ptr];
@@ -209,7 +209,7 @@ int sfs_fwseek(int fileID, int loc) {
 }
 
 /*given the file name path, returns the size of the file. returns -1 if the file doesn't exist.*/
-int sfs_get_next_filename(const char* path) {
+int sfs_getfilesize(const char* path) {
   //search directory for file name `path`
   int dirEntryIndex = dir_find(path);
   if (dirEntryIndex == -1) return -1;//file does not exist
