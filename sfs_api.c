@@ -130,8 +130,8 @@ static void inodeTbl_flush() {
 }
 
 static void dir_flush() {
-  oft[0].write = 0;//set root directory's write ptr to beginning of file
-  sfs_fwrite(0, (char *) dir, sizeof(dir));
+  oft[MAX_FILES - 1].write = 0;//set root directory's write ptr to beginning of file
+  sfs_fwrite(MAX_FILES - 1, (char *) dir, sizeof(dir));
 }
 
 /*Creates a file with the given name and returns it's inode ID, or -1 on failure.*/
@@ -159,6 +159,8 @@ static int createFile(char* name) {
 /*Opens a file with the given name, tries to create a new file if it does not exist. Returns a File Descriptor ID >= 0.
  * returns -1 on failure.*/
 int sfs_fopen(char *name) {
+  //check name length
+  if (strlen(name) > MAX_FNAME_SIZE) return -1;
   int inodeID;
   //search for file name
   int fileDirIndex = dir_find(name);
@@ -218,19 +220,19 @@ int sfs_get_next_filename(const char* path) {
 
 /*Initializes the directory cache by reading the directory contents from the disk.*/
 static void dir_init() {
-  oft[0].read = 0;//set root dir's read pointer to beginning of file
-  sfs_fread(0, (char *)dir, sizeof(dir));
+  oft[MAX_FILES - 1].read = 0;//set root dir's read pointer to beginning of file
+  sfs_fread(MAX_FILES - 1, (char *)dir, sizeof(dir));
 }
 
 /*Initializes the Open File Descriptor Table (OFT) in-memory data structure.
  * After initialization, the OFT will only contain 1 open file, the root directory.*/
 static void oft_init() {
-  //open the root dir file at initialization
-  oft[0].inodeID = ROOT_DIR_INODE;
-  oft[0].read = 0;
-  oft[0].write = fetchInode(ROOT_DIR_INODE).size;
+  //open the root dir file at initialization, use the last entry
+  oft[MAX_FILES - 1].inodeID = ROOT_DIR_INODE;
+  oft[MAX_FILES - 1].read = 0;
+  oft[MAX_FILES - 1].write = fetchInode(ROOT_DIR_INODE).size;
   //all other entries are set to closed
-  for (int i = 1; i < MAX_FILES; ++i) {
+  for (int i = 0; i < MAX_FILES - 1; ++i) {
     oft[i].inodeID = -1;
     oft[i].read = 0;
     oft[i].write = 0;
