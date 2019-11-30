@@ -330,9 +330,8 @@ int sfs_fread(int fileID, char *buf, int length) {
     length = MAX_FILE_SIZE - file.read;
   }
   //read into buf from disk block by block.
-  int eof = 0;//0 means not at end of file. 1 means at end of file.
-  int bufIndex = 0;//index in buf that will be written to next
-  while (bufIndex < length && eof == 0) {
+  int bufIndex = 0;
+  while (bufIndex < length) {
     int blockNum;//address of block being written to
     char blockBuff[BLOCK_BYTES];//buffer for data block
     int inodePointer = file.read / BLOCK_BYTES;
@@ -353,25 +352,18 @@ int sfs_fread(int fileID, char *buf, int length) {
     /*now perform read*/
     //where the read pointer is within the block
     int blockReadPointer = file.read % BLOCK_BYTES;
+    //read until either end of block or end of buffer
+    int numBytes = min(BLOCK_BYTES - blockReadPointer, length - bufIndex);
     if (blockNum <= 0) {
-      eof = 1;//no data block, mark as EOF
+      //no data block, treat as all-zero block
+      memset(&buf[bufIndex], 0, numBytes);
     } else {
       //there is a data block, read it into memory and transfer to buf
       read_blocks(blockNum, 1, blockBuff);
-      //read until either end of block, end of buffer, or EOF
-      int numBytes = min(BLOCK_BYTES - blockReadPointer, length - bufIndex);
-      //transfer byte by byte, stop if EOF is hit
-      for (int byte = 0; byte < numBytes; ++byte) {
-        if (blockBuff[blockReadPointer + byte] == '\0') {//hit EOF
-          eof = 1;
-          break;
-        } else {
-          buf[bufIndex] = blockBuff[blockReadPointer + byte];
-          file.read++;
-          bufIndex++;
-        }
-      }
+      memcpy(&buf[bufIndex], blockBuff+blockReadPointer, numBytes);
     }
+    file.read += numBytes;
+    bufIndex += numBytes;
   }
   //update open file descriptor table
   oft[fileID] = file;
