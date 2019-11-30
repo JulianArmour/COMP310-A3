@@ -107,6 +107,7 @@ static int oft_findFree() {
   return -1;
 }
 
+/*returns the index in the oft that has the inode with id = inodeID. returns -1 if not found.*/
 static int oft_find(int inodeID) {
   for (int entry = 0; entry < MAX_FILES; ++entry) {
     if (oft[entry].inodeID == inodeID)
@@ -481,6 +482,7 @@ int sfs_remove(char *file) {
   int dirEntry = dir_find(file);
   if (dirEntry < 0) return -1;
   int inodeID = inodeID_from_dirIndex(dirEntry);
+  if (oft_find(inodeID) >= 0) return -1;//if file is open, return error
   Inode inode = fetchInode(inodeID);
   //free direct pointer blocks
   for (int pointer = 0; pointer < 12; ++pointer) {
@@ -502,7 +504,9 @@ int sfs_remove(char *file) {
   freeBlk(inodeTbl[inodeID]);
   //free inode table entry
   inodeTbl[inodeID] = 0;
+  inodeTbl_flush();
   //free dir entry
   memset(dir[dirEntry], 0, MAX_FNAME_SIZE + sizeof(int));
+  dir_flush();
   return 0;
 }

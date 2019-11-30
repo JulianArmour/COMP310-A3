@@ -419,7 +419,7 @@ main(int argc, char **argv)
 	  sfs_remove(names[i]);
   }
 
-  if (sfs_get_next_filename(filename)) {
+  if (sfs_getnextfilename(filename)) {
 	  fprintf(stderr, "ERROR: should be empty dir\n");
 	  error_count++;
   }
